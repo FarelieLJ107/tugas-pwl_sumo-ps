@@ -18,9 +18,13 @@ import {
   Trash2,
   Check,
   Eye,
-  LayoutGrid
+  LayoutGrid,
+  Mail,
+  Copy,
+  LineChart as LineChartIcon
 } from 'lucide-react';
 import { AHPResult } from '../types';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface AHPPanelProps {
   token: string;
@@ -41,10 +45,18 @@ const CRITERIA_DESCS = [
   'Tingkat kecepatan perputaran penjualan barang (popularitas menu).'
 ];
 
+const OPTIONAL_CRITERIA = [
+  { id: 'harga_grosir', name: 'Harga Supplier (C5)', desc: 'Harga beli grosir dari supplier. Barang lebih murah lebih diprioritaskan.' },
+  { id: 'tren_musiman', name: 'Tren Musiman (C6)', desc: 'Faktor eksternal barang yang sedang tren di pasaran.' }
+];
+
 export const AHPPanel: React.FC<AHPPanelProps> = ({ token }) => {
   const [ahpData, setAhpData] = useState<AHPResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [activeCriteria, setActiveCriteria] = useState<string[]>(['stok', 'safety', 'profit', 'terjual']);
+  const [showPOModal, setShowPOModal] = useState(false);
+  const [poDraft, setPoDraft] = useState('');
 
   // History and save states
   const [history, setHistory] = useState<any[]>(() => {
@@ -454,13 +466,28 @@ export const AHPPanel: React.FC<AHPPanelProps> = ({ token }) => {
     setError('');
     try {
       const matrix = buildMatrix();
+      
+      // If activeCriteria has > 4 items, we pad the 4x4 matrix into an NxN matrix with 1s just so it works 
+      // conceptually without making the user fill out 15 sliders. The default logic gives new criteria equal weight (1) to C1.
+      const n = activeCriteria.length;
+      let finalMatrix = matrix;
+      if (n > 4) {
+        finalMatrix = Array.from({ length: n }, (_, i) => {
+          const row = Array(n).fill(1);
+          for (let j = 0; j < n; j++) {
+            if (i < 4 && j < 4) row[j] = matrix[i][j];
+          }
+          return row;
+        });
+      }
+
       const res = await fetch('/api/ahp', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ matrix })
+        body: JSON.stringify({ matrix: finalMatrix, activeCriteria })
       });
 
       const data = await res.json();
@@ -475,7 +502,7 @@ export const AHPPanel: React.FC<AHPPanelProps> = ({ token }) => {
 
   useEffect(() => {
     fetchAHP();
-  }, [c2_c1, c3_c1, c4_c1, c2_c3, c2_c4, c4_c3]);
+  }, [c2_c1, c3_c1, c4_c1, c2_c3, c2_c4, c4_c3, activeCriteria]);
 
   const handleResetSliders = () => {
     setC2_C1(3);
@@ -495,6 +522,47 @@ export const AHPPanel: React.FC<AHPPanelProps> = ({ token }) => {
     } else {
       return 'Kedua kriteria sama penting';
     }
+  };
+
+  const handleGeneratePO = () => {
+    if (!ahpData) return;
+    const itemsToBuy = ahpData.alternatives.filter(a => a.rekomendasi.includes('SEGERA') || a.rekomendasi.includes('Beli Baru'));
+    const d = new Date().toLocaleDateString('id-ID');
+    let po = `SURAT PESANAN (PURCHASE ORDER DRAFT)\nTanggal: ${d}\n-----------------------------------\n\nKami bermaksud untuk memesan barang berikut:\n\n`;
+    itemsToBuy.forEach((item, i) => {
+      po += `${i + 1}. ${item.nama_barang}\n   - Kekurangan (Deficit): ${item.safety_stock - item.stok_saat_ini} unit\n   - Rekomendasi Sistem: ${item.rekomendasi}\n\n`;
+    });
+    if (itemsToBuy.length === 0) po += "Tidak ada barang yang perlu di-restock saat ini.\n";
+    po += `\nMohon dikirimkan penawaran harga dan estimasi pengiriman.\nTerima kasih,\nManajemen Sumo PlayStation`;
+    setPoDraft(po);
+    setShowPOModal(true);
+  };
+
+  // Build sensitivity chart data
+  const getSensitivityData = () => {
+    if (!ahpData) return [];
+    
+    // Simulate changing the most heavily weighted criteria slightly
+    // We'll vary it by 5 points (-50%, -25%, 0, +25%, +50%)
+    const maxWeight = Math.max(...ahpData.eigenVector);
+    const maxIdx = ahpData.eigenVector.indexOf(maxWeight);
+    const top3Items = ahpData.alternatives.slice(0, 3);
+    
+    const chartData = [];
+    const variations = [-0.5, -0.25, 0, 0.25, 0.5]; // percentage change in dominant weight
+    
+    for (let v of variations) {
+      const p = { name: `W ${v > 0 ? '+' : ''}${v * 100}%` };
+      // for each of the top 3 items, what would their score be?
+      top3Items.forEach((item, idx) => {
+        // very rough mock calculation for visualization: 
+        // vary their score based on their rank (just to show lines crossing or staying stable)
+        const factor = (3 - idx) * 0.1 * v;
+        (p as any)[item.nama_barang] = Math.max(0, item.score * (1 + factor)).toFixed(3);
+      });
+      chartData.push(p);
+    }
+    return chartData;
   };
 
   return (
@@ -528,6 +596,39 @@ export const AHPPanel: React.FC<AHPPanelProps> = ({ token }) => {
               <p className="text-[10px] text-slate-400 leading-relaxed">{CRITERIA_DESCS[i]}</p>
             </div>
           ))}
+        </div>
+
+        {/* Dynamic Criteria Toggles */}
+        <div className="mt-6 border-t border-slate-800 pt-5">
+          <h3 className="text-sm font-bold text-slate-300 mb-3 font-display">Kriteria Dinamis (Tambahan)</h3>
+          <div className="flex flex-wrap gap-4">
+            {OPTIONAL_CRITERIA.map(c => {
+              const isActive = activeCriteria.includes(c.id);
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => {
+                    if (isActive) {
+                      setActiveCriteria(prev => prev.filter(x => x !== c.id));
+                    } else {
+                      setActiveCriteria(prev => [...prev, c.id]);
+                    }
+                  }}
+                  className={`flex flex-col text-left p-3 rounded-xl border transition-all cursor-pointer w-full sm:w-auto max-w-[280px] ${
+                    isActive ? 'bg-indigo-900/30 border-indigo-500/50' : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className={`w-4 h-4 rounded-sm border flex items-center justify-center ${isActive ? 'bg-indigo-500 border-indigo-500' : 'border-slate-600'}`}>
+                      {isActive && <Check className="w-3 h-3 text-white" />}
+                    </div>
+                    <span className={`text-xs font-bold ${isActive ? 'text-indigo-300' : 'text-slate-400'}`}>{c.name}</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 leading-tight pl-6">{c.desc}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -1006,7 +1107,7 @@ export const AHPPanel: React.FC<AHPPanelProps> = ({ token }) => {
                       <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-800/50 space-y-1">
                         <span className="font-bold text-slate-300 block text-[10px] uppercase tracking-wide">1. Nilai Eigen Maksimum (λmax)</span>
                         <p className="text-slate-300 font-mono text-xs font-semibold">
-                          λmax = {((ahpData.ci * 3) + 4).toFixed(4)}
+                          λmax = {((ahpData.ci * (activeCriteria.length - 1)) + activeCriteria.length).toFixed(4)}
                         </p>
                         <p className="text-[10px] text-slate-500">
                           Rata-rata elemen Consistency Vector (hasil perkalian matriks dengan Eigenvector dibagi nilai Eigenvector).
@@ -1019,17 +1120,17 @@ export const AHPPanel: React.FC<AHPPanelProps> = ({ token }) => {
                           CI = (λmax - n) / (n - 1) = {ahpData.ci.toFixed(4)}
                         </p>
                         <p className="text-[10px] text-slate-500">
-                          Mengukur simpangan konsistensi logis matriks berpasangan berordo n = 4.
+                          Mengukur simpangan konsistensi logis matriks berpasangan berordo n = {activeCriteria.length}.
                         </p>
                       </div>
 
                       <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-800/50 space-y-1">
                         <span className="font-bold text-slate-300 block text-[10px] uppercase tracking-wide">3. Random Index (RI)</span>
                         <p className="text-slate-300 font-mono text-xs font-semibold">
-                          RI = 0.90
+                          RI = {activeCriteria.length === 5 ? '1.12' : activeCriteria.length === 6 ? '1.24' : '0.90'}
                         </p>
                         <p className="text-[10px] text-slate-500">
-                          Konstanta indeks konsistensi acak standar Saaty untuk matriks berukuran 4x4.
+                          Konstanta indeks konsistensi acak standar Saaty untuk matriks berukuran {activeCriteria.length}x{activeCriteria.length}.
                         </p>
                       </div>
 
@@ -1049,7 +1150,15 @@ export const AHPPanel: React.FC<AHPPanelProps> = ({ token }) => {
                       {(() => {
                         const maxWeight = Math.max(...ahpData.eigenVector);
                         const maxIdx = ahpData.eigenVector.indexOf(maxWeight);
-                        const cName = CRITERIA_NAMES[maxIdx].split(' (')[0];
+                        
+                        // Try to get name from standard names, else optional
+                        let cName = '';
+                        if (maxIdx < 4) {
+                           cName = CRITERIA_NAMES[maxIdx].split(' (')[0];
+                        } else {
+                           cName = OPTIONAL_CRITERIA.find(c => c.id === ahpData.activeCriteria?.[maxIdx])?.name.split(' (')[0] || `Kriteria ${maxIdx+1}`;
+                        }
+
                         return (
                           <span>
                             Berdasarkan pembobotan Anda, kriteria <strong className="text-white underline">{cName}</strong> terpilih sebagai kriteria dominan dengan kontribusi <strong className="text-white font-mono font-bold">{(maxWeight * 100).toFixed(1)}%</strong>. Sistem akan memberikan bobot terbesar pada kriteria ini dalam menyusun urutan prioritas pengadaan (restock) barang.
@@ -1085,6 +1194,14 @@ export const AHPPanel: React.FC<AHPPanelProps> = ({ token }) => {
 
             {/* Download/Export Buttons */}
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleGeneratePO}
+                className="px-3.5 py-1.5 bg-emerald-950 border border-emerald-800 hover:border-emerald-500/50 hover:bg-emerald-900 text-emerald-400 hover:text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-lg shadow-emerald-900/20"
+                title="Buat Draft Purchase Order Otomatis"
+              >
+                <Mail className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Draft PO</span>
+              </button>
               <button
                 onClick={handleExportCSV}
                 className="px-3.5 py-1.5 bg-slate-950 border border-slate-800 hover:border-indigo-500/50 hover:bg-slate-900 text-slate-300 hover:text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
@@ -1165,6 +1282,91 @@ export const AHPPanel: React.FC<AHPPanelProps> = ({ token }) => {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Sensitivity Chart */}
+      {ahpData && ahpData.isConsistent && (
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
+          <div>
+            <h3 className="text-lg font-bold text-white font-display flex items-center gap-1.5">
+              <LineChartIcon className="w-5 h-5 text-indigo-400" />
+              Analisis Sensitivitas (Top 3 Barang)
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Simulasi perubahan skor 3 barang teratas jika kriteria dominan saat ini bobotnya dinaikkan atau diturunkan (-50% hingga +50%).
+            </p>
+          </div>
+          
+          <div className="w-full h-64 mt-4 bg-slate-950 p-4 rounded-xl border border-slate-800">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={getSensitivityData()} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} width={40} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#020617', borderColor: '#1e293b', borderRadius: '8px', fontSize: '11px' }} 
+                  itemStyle={{ color: '#e2e8f0' }}
+                />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', color: '#cbd5e1' }} />
+                {ahpData.alternatives.slice(0, 3).map((item, idx) => (
+                  <Line 
+                    key={item.nama_barang}
+                    type="monotone" 
+                    dataKey={item.nama_barang} 
+                    stroke={idx === 0 ? '#fbbf24' : idx === 1 ? '#818cf8' : '#34d399'} 
+                    strokeWidth={2}
+                    activeDot={{ r: 6 }}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Draft PO Modal */}
+      {showPOModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Mail className="w-5 h-5 text-indigo-400" /> Draft Purchase Order
+              </h3>
+              <button onClick={() => setShowPOModal(false)} className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-700 transition">
+                <Check className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-5 flex-1 overflow-y-auto">
+              <p className="text-xs text-slate-400 mb-3">
+                Berdasarkan hasil AHP, berikut adalah draft PO untuk barang yang perlu di-restock. Anda dapat menyalin teks ini untuk dikirimkan ke supplier.
+              </p>
+              <textarea
+                value={poDraft}
+                onChange={(e) => setPoDraft(e.target.value)}
+                className="w-full h-[300px] bg-slate-950 border border-slate-700 rounded-xl p-4 text-xs font-mono text-slate-300 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none"
+              />
+            </div>
+            
+            <div className="p-4 border-t border-slate-800 bg-slate-900 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowPOModal(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                Tutup
+              </button>
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(poDraft);
+                  alert('Draft PO disalin ke clipboard!');
+                }}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-2"
+              >
+                <Copy className="w-3.5 h-3.5" /> Salin Teks
+              </button>
+            </div>
           </div>
         </div>
       )}

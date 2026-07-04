@@ -16,7 +16,9 @@ import {
   ReceiptText,
   Menu,
   X,
-  HardDrive
+  HardDrive,
+  Sun,
+  Moon
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { User, KonsolTV, Inventori } from './types';
@@ -33,12 +35,31 @@ import { NotificationToast, ToastMessage } from './components/NotificationToast'
 import { FloatingAuditLogs } from './components/FloatingAuditLogs';
 
 import { DrivePanel } from './components/DrivePanel';
+import { apiClient } from './services/apiClient';
 
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('sumops_token'));
   const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<string>('billing');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Advanced Dark/Light Theme State & Effects
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    const saved = localStorage.getItem('sumops_theme');
+    return saved === 'light' ? false : true; // Default to dark mode for game/playstation vibe
+  });
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+      localStorage.setItem('sumops_theme', 'dark');
+    } else {
+      document.documentElement.classList.add('light');
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('sumops_theme', 'light');
+    }
+  }, [darkMode]);
 
   // Business state
   const [tvs, setTvs] = useState<(KonsolTV & { activeBilling?: any })[]>([]);
@@ -54,21 +75,13 @@ export default function App() {
   // Load active session user if token exists
   const fetchMe = async (authToken: string) => {
     try {
-      const res = await fetch('/api/auth/me', {
-        headers: { 'Authorization': `Bearer ${authToken}` }
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setUser(data.user);
-        // Default tabs based on role
-        if (data.user.role === 'pemilik') {
-          setActiveTab('analytics');
-        } else {
-          setActiveTab('billing');
-        }
+      const data = await apiClient.auth.getMe(authToken);
+      setUser(data.user);
+      // Default tabs based on role
+      if (data.user.role === 'pemilik') {
+        setActiveTab('analytics');
       } else {
-        // Clear stale session
-        handleLogout();
+        setActiveTab('billing');
       }
     } catch (e) {
       handleLogout();
@@ -85,11 +98,8 @@ export default function App() {
   const fetchTVs = async () => {
     if (!token) return;
     try {
-      const res = await fetch('/api/konsol', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (res.ok) setTvs(data);
+      const data = await apiClient.tvs.getAll(token);
+      setTvs(data);
     } catch (e) {
       console.error(e);
     }
@@ -99,11 +109,8 @@ export default function App() {
   const fetchInventory = async () => {
     if (!token) return;
     try {
-      const res = await fetch('/api/inventori', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (res.ok) setInventory(data);
+      const data = await apiClient.inventori.getAll(token);
+      setInventory(data);
     } catch (e) {
       console.error(e);
     }
@@ -269,10 +276,7 @@ export default function App() {
   const handleLogout = async () => {
     if (token) {
       try {
-        await fetch('/api/auth/logout', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        await apiClient.auth.logout(token);
       } catch (e) {
         console.error(e);
       }
@@ -286,17 +290,7 @@ export default function App() {
   // Cashier Billing Handlers
   const handleStartBilling = async (id_tv: number, options: any) => {
     try {
-      const res = await fetch(`/api/konsol/${id_tv}/start`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(options)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal memulai billing.');
-      
+      await apiClient.tvs.start(token!, id_tv, options);
       fetchTVs();
       addToast('success', 'Billing Dimulai', `Timer sewa TV-0${id_tv} telah aktif.`);
     } catch (err: any) {
@@ -306,17 +300,7 @@ export default function App() {
 
   const handleStopBilling = async (id_tv: number, paymentMethod: string) => {
     try {
-      const res = await fetch(`/api/konsol/${id_tv}/stop`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ metode_pembayaran: paymentMethod })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal menghentikan billing.');
-      
+      const data = await apiClient.tvs.stop(token!, id_tv, paymentMethod as any);
       fetchTVs();
       addToast('success', 'Sewa Selesai', `Pembayaran untuk TV-0${id_tv} berhasil diproses.`);
       return data;
@@ -327,36 +311,19 @@ export default function App() {
   };
 
   const handleOrderMenu = async (id_billing: string, items: any[]) => {
-    const res = await fetch('/api/menu/order', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ id_billing, items })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Gagal memesan menu.');
-    
-    fetchTVs();
-    fetchInventory();
-    addToast('success', 'Pesanan Disimpan', 'Menu berhasil dipesan dan mengurangi stok inventori.');
+    try {
+      await apiClient.menu.order(token!, id_billing, items);
+      fetchTVs();
+      fetchInventory();
+      addToast('success', 'Pesanan Disimpan', 'Menu berhasil dipesan dan mengurangi stok inventori.');
+    } catch (err: any) {
+      alert(err.message);
+    }
   };
 
   const handleSetStatus = async (id_tv: number, status: 'booking' | 'maintenance' | 'free') => {
-    let url = `/api/konsol/${id_tv}/free`;
-    if (status === 'booking') url = `/api/konsol/${id_tv}/booking`;
-    else if (status === 'maintenance') url = `/api/konsol/${id_tv}/maintenance`;
-
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Gagal mengubah status.');
-      }
+      await apiClient.tvs.setStatus(token!, id_tv, status);
       fetchTVs();
     } catch (err: any) {
       alert(err.message);
@@ -364,7 +331,34 @@ export default function App() {
   };
 
   if (!token || !user) {
-    return <Login onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <div className="relative min-h-screen">
+        <div className="absolute top-6 right-6 z-50">
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            className={`relative w-12 h-6 rounded-full p-0.5 transition-colors duration-300 cursor-pointer flex items-center ${
+              darkMode ? 'bg-slate-950 border border-slate-800' : 'bg-indigo-100 border border-indigo-200'
+            }`}
+            title={darkMode ? "Aktifkan Mode Terang" : "Aktifkan Mode Gelap"}
+          >
+            <motion.div
+              layout
+              className={`w-5 h-5 rounded-full flex items-center justify-center shadow-md ${
+                darkMode ? 'bg-indigo-600 text-white ml-auto' : 'bg-white text-indigo-600 mr-auto'
+              }`}
+              transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+            >
+              {darkMode ? (
+                <Moon className="w-3 h-3" />
+              ) : (
+                <Sun className="w-3 h-3" />
+              )}
+            </motion.div>
+          </button>
+        </div>
+        <Login onLoginSuccess={handleLoginSuccess} />
+      </div>
+    );
   }
 
   return (
@@ -373,16 +367,41 @@ export default function App() {
       {/* LEFT SIDEBAR (Desktop only, block on md) */}
       <aside className="hidden md:flex flex-col w-64 bg-slate-900 border-r border-slate-800 shrink-0 sticky top-0 h-screen overflow-y-auto">
         {/* Sidebar Header */}
-        <div className="p-6 border-b border-slate-800 flex items-center gap-2.5">
-          <div className="p-2 bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 rounded-xl">
-            <Gamepad2 className="w-5 h-5 animate-pulse" />
+        <div className="p-6 border-b border-slate-800 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 rounded-xl">
+              <Gamepad2 className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <h1 className="text-sm font-extrabold tracking-tight text-white font-display">
+                SUMO <span className="text-indigo-400">PLAYSTATION</span>
+              </h1>
+              <p className="text-[9px] text-slate-400 font-mono tracking-wider uppercase">Billing & Decision</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-sm font-extrabold tracking-tight text-white font-display">
-              SUMO <span className="text-indigo-400">PLAYSTATION</span>
-            </h1>
-            <p className="text-[9px] text-slate-400 font-mono tracking-wider uppercase">Billing & Decision</p>
-          </div>
+          
+          {/* Advanced Slidable Dark / Light Switch */}
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            className={`relative w-11 h-6 rounded-full p-0.5 transition-colors duration-300 cursor-pointer flex items-center shrink-0 ${
+              darkMode ? 'bg-slate-950 border border-slate-800' : 'bg-indigo-100 border border-indigo-200'
+            }`}
+            title={darkMode ? "Aktifkan Mode Terang" : "Aktifkan Mode Gelap"}
+          >
+            <motion.div
+              layout
+              className={`w-4.5 h-4.5 rounded-full flex items-center justify-center shadow-sm ${
+                darkMode ? 'bg-indigo-600 text-white ml-auto' : 'bg-white text-indigo-600 mr-auto'
+              }`}
+              transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+            >
+              {darkMode ? (
+                <Moon className="w-2.5 h-2.5" />
+              ) : (
+                <Sun className="w-2.5 h-2.5" />
+              )}
+            </motion.div>
+          </button>
         </div>
 
         {/* Sidebar Navigation */}
@@ -513,12 +532,37 @@ export default function App() {
             </div>
           </div>
 
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 bg-slate-850 border border-slate-750 text-slate-300 rounded-xl cursor-pointer"
-          >
-            {mobileMenuOpen ? <X className="w-4.5 h-4.5" /> : <Menu className="w-4.5 h-4.5" />}
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Advanced Slidable Dark / Light Switch */}
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className={`relative w-11 h-6 rounded-full p-0.5 transition-colors duration-300 cursor-pointer flex items-center ${
+                darkMode ? 'bg-slate-950 border border-slate-800' : 'bg-indigo-100 border border-indigo-200'
+              }`}
+              title={darkMode ? "Aktifkan Mode Terang" : "Aktifkan Mode Gelap"}
+            >
+              <motion.div
+                layout
+                className={`w-4.5 h-4.5 rounded-full flex items-center justify-center shadow-sm ${
+                  darkMode ? 'bg-indigo-600 text-white ml-auto' : 'bg-white text-indigo-600 mr-auto'
+                }`}
+                transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+              >
+                {darkMode ? (
+                  <Moon className="w-2.5 h-2.5" />
+                ) : (
+                  <Sun className="w-2.5 h-2.5" />
+                )}
+              </motion.div>
+            </button>
+
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 bg-slate-850 border border-slate-750 text-slate-300 rounded-xl cursor-pointer"
+            >
+              {mobileMenuOpen ? <X className="w-4.5 h-4.5" /> : <Menu className="w-4.5 h-4.5" />}
+            </button>
+          </div>
         </header>
 
         {/* MOBILE OVERLAY NAVIGATION MENU */}

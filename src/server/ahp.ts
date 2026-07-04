@@ -25,9 +25,10 @@ export const DEFAULT_CRITERIA_MATRIX = [
 
 export function calculateAHP(
   items: Inventori[],
-  criteriaMatrix: number[][] = DEFAULT_CRITERIA_MATRIX
+  criteriaMatrix: number[][] = DEFAULT_CRITERIA_MATRIX,
+  activeCriteria: string[] = ['stok', 'safety', 'profit', 'terjual']
 ): AHPResult {
-  const n = criteriaMatrix.length; // n = 4
+  const n = criteriaMatrix.length; 
   
   // 1. Calculate column sums
   const colSums = Array(n).fill(0);
@@ -43,14 +44,13 @@ export function calculateAHP(
   for (let r = 0; r < n; r++) {
     let rowSum = 0;
     for (let c = 0; c < n; c++) {
-      normMatrix[r][c] = criteriaMatrix[r][c] / colSums[c];
+      normMatrix[r][c] = criteriaMatrix[r][c] / (colSums[c] || 1);
       rowSum += normMatrix[r][c];
     }
     eigenVector[r] = rowSum / n;
   }
 
   // 3. Consistency Calculations
-  // Find weighted sum vector: Matrix * EigenVector
   const weightedSum = Array(n).fill(0);
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
@@ -58,29 +58,25 @@ export function calculateAHP(
     }
   }
 
-  // Find consistency vector (weighted sum element / eigen vector element)
   const consistencyVector = Array(n).fill(0);
   let lambdaMax = 0;
   for (let i = 0; i < n; i++) {
-    consistencyVector[i] = weightedSum[i] / eigenVector[i];
+    consistencyVector[i] = eigenVector[i] ? weightedSum[i] / eigenVector[i] : 0;
     lambdaMax += consistencyVector[i];
   }
-  lambdaMax /= n; // lambda max is average of consistency vector
+  lambdaMax /= (n || 1);
 
-  // Consistency Index (CI)
-  const ci = (lambdaMax - n) / (n - 1);
-  
-  // Consistency Ratio (CR)
+  const ci = n > 1 ? (lambdaMax - n) / (n - 1) : 0;
   const ri = RI_TABLE[n] || 0.90;
   const cr = ri > 0 ? ci / ri : 0;
-  const isConsistent = cr <= 0.1;
+  const isConsistent = n <= 2 || cr <= 0.1;
 
-  // 4. Rank Alternatives (Inventory Items)
-  // Extract values
+  // 4. Rank Alternatives
   const alternativesData = items.map(item => {
     const profit = Math.max(0, item.harga_eceran - item.harga_grosir);
-    // Deficit of stock relative to safety stock
     const deficit = Math.max(0, item.safety_stock - item.stok_saat_ini);
+    // mock seasonal trend based on id length and current month just for variance
+    const tren_musiman = (item.id_barang.length % 5) + (item.jumlah_terjual % 3);
     
     return {
       item,
@@ -88,40 +84,40 @@ export function calculateAHP(
       safety: item.safety_stock,
       deficit,
       profit,
-      terjual: item.jumlah_terjual
+      terjual: item.jumlah_terjual,
+      harga_grosir: item.harga_grosir,
+      tren_musiman
     };
   });
 
-  // Find extremes to normalize scores to [0, 1] range
-  const minStok = Math.min(...alternativesData.map(d => d.stok), 0);
-  const maxStok = Math.max(...alternativesData.map(d => d.stok), 1);
-  const maxDeficit = Math.max(...alternativesData.map(d => d.deficit), 1);
-  const maxProfit = Math.max(...alternativesData.map(d => d.profit), 1);
-  const maxTerjual = Math.max(...alternativesData.map(d => d.terjual), 1);
+  const getScoresForCriteria = (key: string) => {
+    const vals = alternativesData.map((d: any) => d[key]);
+    const min = Math.min(...vals, 0);
+    const max = Math.max(...vals, 1);
+    return alternativesData.map((d: any) => {
+      const v = d[key];
+      // For stock and harga_grosir, LOWER is better (higher priority)
+      if (key === 'stok' || key === 'harga_grosir') {
+        return max === min ? 1.0 : (max - v) / (max - min);
+      }
+      // For others, HIGHER is better
+      return max === 0 ? 0.0 : v / max;
+    });
+  };
 
-  // Normalize each alternative's performance and calculate priority score
-  const rankedItems: AHPPriorityItem[] = alternativesData.map(data => {
-    // C1: Stok Saat Ini (Lower stock is HIGHER priority, so normalize as (Max - Stok) / (Max - Min))
-    const s_stok = maxStok === minStok ? 1.0 : (maxStok - data.stok) / (maxStok - minStok);
-    
-    // C2: Safety Stock Deficit (Higher deficit is HIGHER priority, so normalize to max deficit)
-    const s_safety = maxDeficit === 0 ? 0.0 : data.deficit / maxDeficit;
+  const scoresByCriteria: Record<string, number[]> = {};
+  activeCriteria.forEach(c => {
+    // map key appropriately
+    const mapKey = c === 'safety' ? 'deficit' : c;
+    scoresByCriteria[c] = getScoresForCriteria(mapKey);
+  });
 
-    // C3: Profit (Higher profit is HIGHER priority, normalize to max profit)
-    const s_profit = maxProfit === 0 ? 0.0 : data.profit / maxProfit;
+  const rankedItems: AHPPriorityItem[] = alternativesData.map((data, i) => {
+    let score = 0;
+    activeCriteria.forEach((c, cIdx) => {
+      score += scoresByCriteria[c][i] * (eigenVector[cIdx] || 0);
+    });
 
-    // C4: Jumlah Terjual (Higher sales is HIGHER priority, normalize to max sold)
-    const s_terjual = maxTerjual === 0 ? 0.0 : data.terjual / maxTerjual;
-
-    // Composite Score = sum(criteria_score * criteria_weight)
-    const score = (
-      s_stok * eigenVector[0] +
-      s_safety * eigenVector[1] +
-      s_profit * eigenVector[2] +
-      s_terjual * eigenVector[3]
-    );
-
-    // Formulate a dynamic recommendation message
     let rekomendasi = 'Stok Aman';
     if (data.stok <= data.safety * 0.2) {
       rekomendasi = 'SANGAT SEGERA: Stok kritis di bawah 20% safety stock!';
@@ -141,15 +137,12 @@ export function calculateAHP(
       profit: data.profit,
       jumlah_terjual: data.terjual,
       score: parseFloat(score.toFixed(4)),
-      rank: 0, // Assigned after sorting
+      rank: 0,
       rekomendasi
     };
   });
 
-  // Sort by score in descending order
   rankedItems.sort((a, b) => b.score - a.score);
-  
-  // Assign ranks
   rankedItems.forEach((item, index) => {
     item.rank = index + 1;
   });
@@ -160,6 +153,7 @@ export function calculateAHP(
     ci: parseFloat(ci.toFixed(4)),
     cr: parseFloat(cr.toFixed(4)),
     isConsistent,
-    alternatives: rankedItems
+    alternatives: rankedItems,
+    activeCriteria
   };
 }

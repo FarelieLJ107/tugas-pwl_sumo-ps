@@ -461,7 +461,7 @@ export const BillingCard: React.FC<BillingCardProps> = ({
   const handleOrderSubmit = async () => {
     if (!tv.activeBilling) return;
     const items = Object.entries(cart)
-      .filter(([_, qty]) => qty > 0)
+      .filter(([_, qty]) => (qty as number) > 0)
       .map(([id_barang, qty]) => ({ id_barang, jumlah: qty }));
 
     if (items.length === 0) {
@@ -930,7 +930,7 @@ export const BillingCard: React.FC<BillingCardProps> = ({
                         Rp {Object.entries(cart)
                           .reduce((sum, [id, qty]) => {
                             const item = inventory.find(i => i.id_barang === id);
-                            return sum + (qty * (item?.harga_eceran || 0));
+                            return sum + ((qty as number) * (item?.harga_eceran || 0));
                           }, 0)
                           .toLocaleString('id-ID')}
                       </span>

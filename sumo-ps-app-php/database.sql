@@ -82,6 +82,39 @@ CREATE TABLE IF NOT EXISTS log_aktivitas (
     FOREIGN KEY (id_user) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 8. Tabel rental_bawa_pulang
+CREATE TABLE IF NOT EXISTS rental_bawa_pulang (
+    id_rental VARCHAR(50) PRIMARY KEY,
+    nama_konsol VARCHAR(100) NOT NULL,
+    jenis_konsol VARCHAR(50) NOT NULL,
+    status ENUM('tersedia', 'disewa', 'maintenance') DEFAULT 'tersedia',
+    -- Detail Sewa (Null jika tersedia)
+    nama_pelanggan VARCHAR(100) DEFAULT NULL,
+    no_whatsapp VARCHAR(20) DEFAULT NULL,
+    jaminan VARCHAR(100) DEFAULT NULL,
+    perintilan TEXT DEFAULT NULL, -- format JSON
+    waktu_mulai DATETIME DEFAULT NULL,
+    durasi_hari INT DEFAULT NULL,
+    tarif_per_hari INT DEFAULT NULL,
+    total_bayar INT DEFAULT NULL,
+    kondisi_keluar VARCHAR(100) DEFAULT NULL,
+    catatan TEXT DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 9. Tabel laporan_kerusakan
+CREATE TABLE IF NOT EXISTS laporan_kerusakan (
+    id_laporan VARCHAR(50) PRIMARY KEY,
+    id_rental VARCHAR(50) NOT NULL,
+    nama_konsol VARCHAR(100) NOT NULL,
+    nama_pelanggan VARCHAR(100) NOT NULL,
+    tanggal_laporan DATETIME NOT NULL,
+    detail_kerusakan TEXT NOT NULL,
+    denda INT DEFAULT 0,
+    id_barang_inventori INT DEFAULT NULL,
+    nama_barang_inventori VARCHAR(100) DEFAULT NULL,
+    status ENUM('perlu perbaikan', 'selesai') DEFAULT 'perlu perbaikan'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Seed Default Data (Password default: 'pemilik123' dan 'pegawai123' terenkripsi password_hash)
 INSERT INTO users (username, password, nama_lengkap, role) VALUES
 ('pemilik', '$2y$10$U5RscIeJ/7mfeP/QvXU0tOP7iMv6.QG1X6w/Yn0n9Pq1Gk0uM7U.2', 'Budi Santoso', 'pemilik'),
@@ -105,3 +138,16 @@ INSERT INTO inventori (nama_barang, stok_saat_ini, safety_stock, harga_grosir, h
 ('Teh Botol Sosro', 8, 20, 1500, 4000, 110),
 ('Coca Cola 250ml', 25, 15, 2500, 5000, 64),
 ('Kentang Goreng Sumo', 5, 15, 4000, 10000, 125);
+
+-- Seed 10 Rental Bawa Pulang Slots
+INSERT INTO rental_bawa_pulang (id_rental, nama_konsol, jenis_konsol, status) VALUES
+('PS3-HP-01', 'PS3 Bawa Pulang #01', 'PS3', 'tersedia'),
+('PS3-HP-02', 'PS3 Bawa Pulang #02', 'PS3', 'tersedia'),
+('PS3-HP-03', 'PS3 Bawa Pulang #03', 'PS3', 'tersedia'),
+('PS3-HP-04', 'PS3 Bawa Pulang #04', 'PS3', 'tersedia'),
+('PS3-HP-05', 'PS3 Bawa Pulang #05', 'PS3', 'tersedia'),
+('PS3-HP-06', 'PS3 Bawa Pulang #06', 'PS3', 'tersedia'),
+('PS3-HP-07', 'PS3 Bawa Pulang #07', 'PS3', 'tersedia'),
+('PS3-HP-08', 'PS3 Bawa Pulang #08', 'PS3', 'tersedia'),
+('PS3-HP-09', 'PS3 Bawa Pulang #09', 'PS3', 'tersedia'),
+('PS3-HP-10', 'PS3 Bawa Pulang #10', 'PS3', 'tersedia');

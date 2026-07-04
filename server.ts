@@ -5,7 +5,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { createServer as createViteServer } from 'vite';
 import { loadDb, saveDb, writeLog, hashPassword } from './server-db';
 import { calculateAHP } from './src/server/ahp';
-import { User, KonsolTV, Billing, Inventori, DetailTransaksiMenu, Transaksi } from './src/types';
+import { User, KonsolTV, Billing, Inventori, DetailTransaksiMenu, Transaksi, LaporanKerusakan, LogAktivitas } from './src/types';
 
 const app = express();
 const server = http.createServer(app);
@@ -455,6 +455,7 @@ app.post('/api/inventori', authMiddleware, (req: any, res) => {
 
   const newItem: Inventori = {
     id_barang,
+    kategori: req.body.kategori || 'Makanan',
     nama_barang,
     stok_saat_ini: parseInt(stok_saat_ini),
     safety_stock: parseInt(safety_stock),
@@ -483,6 +484,7 @@ app.put('/api/inventori/:id', authMiddleware, (req: any, res) => {
 
   const updatedItem: Inventori = {
     id_barang,
+    kategori: req.body.kategori || db.inventori[index].kategori || 'Makanan',
     nama_barang: nama_barang || db.inventori[index].nama_barang,
     stok_saat_ini: stok_saat_ini !== undefined ? parseInt(stok_saat_ini) : db.inventori[index].stok_saat_ini,
     safety_stock: safety_stock !== undefined ? parseInt(safety_stock) : db.inventori[index].safety_stock,
@@ -631,9 +633,9 @@ app.get('/api/logs', authMiddleware, (req, res) => {
 
 // 7. AHP API
 app.post('/api/ahp', authMiddleware, (req, res) => {
-  const { matrix } = req.body; // Allows client to post custom matrices
+  const { matrix, activeCriteria } = req.body; // Allows client to post custom matrices
   const db = loadDb();
-  const ahpResult = calculateAHP(db.inventori, matrix);
+  const ahpResult = calculateAHP(db.inventori, matrix, activeCriteria);
   res.json(ahpResult);
 });
 
@@ -813,9 +815,8 @@ app.post('/api/rental-bawa-pulang/:id/return', authMiddleware, (req: any, res) =
   // Create a Transaction in db.transaksi
   const newTransaksi: Transaksi = {
     id_transaksi: 'trx-' + Math.random().toString(36).substring(2, 11),
+    id_billing: null,
     id_tv: null, // null for rental bawa pulang
-    id_user: req.user.id,
-    nama_kasir: req.user.nama_lengkap,
     total_sewa: detail.total_bayar,
     total_menu: denda, // Store the fine inside total_menu (or keep total_sewa/total_menu representing fine as additional item)
     total_bayar: total_semua,

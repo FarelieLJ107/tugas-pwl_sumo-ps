@@ -107,6 +107,7 @@ export interface AHPResult {
   cr: number;
   isConsistent: boolean;
   alternatives: AHPPriorityItem[];
+  activeCriteria?: string[]; // newly added for dynamic criteria
 }
 
 export interface DetailRental {

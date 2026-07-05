@@ -91,10 +91,24 @@ function requireAuth() {
 
 // 5. Router Logic
 $route = $_GET['route'] ?? '';
+if (empty($route) && isset($_SERVER['PATH_INFO'])) {
+    $route = $_SERVER['PATH_INFO'];
+}
+
 $method = $_SERVER['REQUEST_METHOD'];
 
 // Standardize route path by trimming slashes
 $route = trim($route, '/');
+
+// Welcome Route (Untuk testing di localhost)
+if ($route === '' && $method === 'GET') {
+    sendJson([
+        "message" => "API Sumo PlayStation berjalan dengan baik di XAMPP!",
+        "status" => "online",
+        "timestamp" => date('Y-m-d H:i:s'),
+        "hint" => "Gunakan endpoint seperti /api.php/inventori atau /api.php?route=inventori jika .htaccess tidak aktif."
+    ]);
+}
 
 // --- ROUTE 1: AUTHENTICATION ---
 if ($route === 'auth/login' && $method === 'POST') {

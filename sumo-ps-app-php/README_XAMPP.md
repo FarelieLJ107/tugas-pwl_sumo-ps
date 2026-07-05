@@ -20,22 +20,39 @@ Dengan konfigurasi ini, Anda bisa langsung menjalankan aplikasi ini di **XAMPP**
 
 ### Langkah 2: Lakukan Build Frontend React Anda
 Sebelum memindahkan file ke XAMPP, kita perlu mengompilasi file React menjadi aset statis HTML, CSS, dan JS yang siap disajikan oleh Apache (XAMPP).
-1. Buka terminal di folder proyek utama ini.
-2. Jalankan perintah kompilasi:
-   ```bash
-   npm run build
-   ```
-3. Proses build ini akan menghasilkan folder bernama `dist/` di root proyek Anda.
+
+#### 💻 Jika Anda menggunakan VS Code (Sangat Direkomendasikan):
+1. **Buka Folder Proyek di VS Code:**
+   * Pastikan Anda membuka folder root proyek (`tugas-pwl-sumo-ps` atau nama folder repositori Anda) melalui menu **File -> Open Folder**. Jangan hanya membuka satu atau dua file saja.
+2. **Buka Terminal Bawaan VS Code:**
+   * Tekan tombol pintas keyboard `Ctrl + \`` (tombol backtick di sebelah angka 1) ATAU buka menu atas: **Terminal -> New Terminal**.
+3. **Pastikan Lokasi Folder Sudah Benar:**
+   * Lihat jalur/path folder yang tertera di baris perintah terminal Anda. Pastikan posisinya berada di root proyek Anda (tempat file `package.json` berada).
+4. **Instal Paket Dependensi:**
+   * Ketik perintah berikut lalu tekan **Enter** (tunggu hingga proses selesai dan muncul pesan sukses):
+     ```bash
+     npm install
+     ```
+5. **Jalankan Perintah Build:**
+   * Setelah instalasi paket selesai, ketik perintah berikut lalu tekan **Enter**:
+     ```bash
+     npm run build
+     ```
+6. **Refresh File Explorer VS Code (Jika folder `dist/` belum muncul):**
+   * Terkadang VS Code butuh waktu untuk memperbarui daftar folder di panel kiri. Arahkan kursor ke area kosong di panel Explorer kiri, lalu klik tombol **Refresh** (ikon melingkar di samping tulisan judul folder proyek) atau tekan `F5` untuk menyegarkan tampilan. Folder `dist/` akan otomatis muncul!
 
 ---
 
 ### Langkah 3: Pindahkan File ke Folder `htdocs` XAMPP
 1. Buat folder baru di dalam `C:\xampp\htdocs\` dengan nama `sumo-playstation` (sehingga jalurnya menjadi `C:\xampp\htdocs\sumo-playstation\`).
-2. Salin **seluruh isi** dari folder `dist/` hasil build Anda ke dalam folder `C:\xampp\htdocs\sumo-playstation\`.
-3. Salin juga file-file PHP berikut dari folder `/sumo-ps-app-php/` langsung ke root folder `C:\xampp\htdocs\sumo-playstation\`:
+2. Buka folder `dist/` yang baru saja terbuat, lalu salin file berikut ke dalam `C:\xampp\htdocs\sumo-playstation\`:
+   * Folder `assets/`
+   * File `index.html`
+   * *(Catatan: Abaikan file `server.cjs` dan `server.cjs.map` karena itu adalah file backend Node.js lama yang tidak kita gunakan di XAMPP).*
+3. Buka folder `/sumo-ps-app-php/` di proyek Anda, lalu salin file-file PHP berikut ke dalam `C:\xampp\htdocs\sumo-playstation\`:
    * `api.php` (Server API kita)
    * `.htaccess` (Konfigurasi URL Rewrite otomatis agar `/api/*` terbaca oleh PHP)
-   * `models/` (Folder berisi logika perhitungan AHP - `models/AHP.php`)
+   * Folder `models/` (Berisi logika perhitungan AHP - `models/AHP.php`)
 
 Struktur folder akhir di dalam `C:\xampp\htdocs\sumo-playstation\` akan terlihat seperti ini:
 ```text

@@ -456,6 +456,7 @@ app.post('/api/inventori', authMiddleware, (req: any, res) => {
   const newItem: Inventori = {
     id_barang,
     kategori: req.body.kategori || 'Makanan',
+    status: req.body.status || 'baik',
     nama_barang,
     stok_saat_ini: parseInt(stok_saat_ini),
     safety_stock: parseInt(safety_stock),
@@ -485,6 +486,7 @@ app.put('/api/inventori/:id', authMiddleware, (req: any, res) => {
   const updatedItem: Inventori = {
     id_barang,
     kategori: req.body.kategori || db.inventori[index].kategori || 'Makanan',
+    status: req.body.status || db.inventori[index].status || 'baik',
     nama_barang: nama_barang || db.inventori[index].nama_barang,
     stok_saat_ini: stok_saat_ini !== undefined ? parseInt(stok_saat_ini) : db.inventori[index].stok_saat_ini,
     safety_stock: safety_stock !== undefined ? parseInt(safety_stock) : db.inventori[index].safety_stock,

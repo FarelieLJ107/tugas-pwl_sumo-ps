@@ -75,6 +75,7 @@ export const InventoryPanel: React.FC<InventoryPanelProps> = ({ token, onRefresh
   // Form Fields
   const [namaBarang, setNamaBarang] = useState('');
   const [kategori, setKategori] = useState('Makanan');
+  const [statusItem, setStatusItem] = useState('baik');
   const [stokSaatIni, setStokSaatIni] = useState(0);
   const [safetyStock, setSafetyStock] = useState(0);
   const [hargaGrosir, setHargaGrosir] = useState(0);
@@ -103,6 +104,7 @@ export const InventoryPanel: React.FC<InventoryPanelProps> = ({ token, onRefresh
   const handleOpenAdd = () => {
     setNamaBarang('');
     setKategori('Makanan');
+    setStatusItem('baik');
     setStokSaatIni(10);
     setSafetyStock(5);
     setHargaGrosir(1000);
@@ -114,6 +116,7 @@ export const InventoryPanel: React.FC<InventoryPanelProps> = ({ token, onRefresh
     setSelectedItem(item);
     setNamaBarang(item.nama_barang);
     setKategori(item.kategori || 'Makanan');
+    setStatusItem(item.status || 'baik');
     setStokSaatIni(item.stok_saat_ini);
     setSafetyStock(item.safety_stock);
     setHargaGrosir(item.harga_grosir);
@@ -134,7 +137,8 @@ export const InventoryPanel: React.FC<InventoryPanelProps> = ({ token, onRefresh
       safety_stock: safetyStock,
       harga_grosir: hargaGrosir,
       harga_eceran: hargaEceran,
-      kategori: kategori
+      kategori: kategori,
+      status: statusItem
     };
 
     try {
@@ -411,6 +415,7 @@ export const InventoryPanel: React.FC<InventoryPanelProps> = ({ token, onRefresh
                   <th className="p-4">Kode</th>
                   <th className="p-4">Nama Barang / Menu</th>
                   <th className="p-4">Kategori</th>
+                  <th className="p-4">Status</th>
                   <th className="p-4 text-right">Stok Saat Ini</th>
                   <th className="p-4 text-right">Safety Stock</th>
                   <th className="p-4 text-right">Harga Grosir</th>
@@ -433,6 +438,15 @@ export const InventoryPanel: React.FC<InventoryPanelProps> = ({ token, onRefresh
                       <td className="p-4">
                         <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold border bg-slate-950/60 border-slate-800 text-indigo-400">
                           {item.kategori}
+                        </span>
+                      </td>
+                      <td className="p-4 text-left">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                          item.status === 'baik' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
+                          item.status === 'perlu perbaikan' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 
+                          'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                        }`}>
+                          {item.status || 'baik'}
                         </span>
                       </td>
                       <td className="p-4 text-right font-mono font-semibold">
@@ -524,6 +538,20 @@ export const InventoryPanel: React.FC<InventoryPanelProps> = ({ token, onRefresh
                     <option value="Makanan">Makanan</option>
                     <option value="Minuman">Minuman</option>
                     <option value="Camilan">Camilan</option>
+                    <option value="Alat">Alat</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Status</label>
+                  <select
+                    value={statusItem}
+                    onChange={(e) => setStatusItem(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg p-2.5 focus:border-indigo-500 focus:outline-none"
+                  >
+                    <option value="baik">Baik</option>
+                    <option value="perlu perbaikan">Perlu Perbaikan</option>
+                    <option value="rusak">Rusak</option>
                   </select>
                 </div>
 

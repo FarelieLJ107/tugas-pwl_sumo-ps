@@ -47,7 +47,9 @@ CREATE TABLE IF NOT EXISTS inventori (
     safety_stock INT NOT NULL DEFAULT 0,
     harga_grosir INT NOT NULL DEFAULT 0,
     harga_eceran INT NOT NULL DEFAULT 0,
-    jumlah_terjual INT NOT NULL DEFAULT 0
+    jumlah_terjual INT NOT NULL DEFAULT 0,
+    kategori VARCHAR(50) DEFAULT 'Makanan',
+    status ENUM('baik', 'perlu perbaikan', 'rusak') DEFAULT 'baik'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 5. Tabel detail_transaksi_menu
@@ -132,12 +134,27 @@ INSERT INTO konsol_tv (nama_tv, jenis_konsol, status) VALUES
 ('TV-08', 'PlayStation 4 Pro', 'kosong');
 
 -- Seed Starting Inventory
-INSERT INTO inventori (nama_barang, stok_saat_ini, safety_stock, harga_grosir, harga_eceran, jumlah_terjual) VALUES
-('Indomie Goreng + Telur', 14, 25, 3000, 7000, 142),
-('Kopi Susu Es', 30, 15, 2000, 5000, 98),
-('Teh Botol Sosro', 8, 20, 1500, 4000, 110),
-('Coca Cola 250ml', 25, 15, 2500, 5000, 64),
-('Kentang Goreng Sumo', 5, 15, 4000, 10000, 125);
+INSERT INTO inventori (nama_barang, stok_saat_ini, safety_stock, harga_grosir, harga_eceran, jumlah_terjual, kategori, status) VALUES
+('Teh Manis Hangat', 50, 10, 1500, 3000, 85, 'Minuman', 'baik'),
+('Es Teh Manis', 80, 15, 2000, 4000, 120, 'Minuman', 'baik'),
+('Kopi Panas', 40, 10, 2000, 4000, 45, 'Minuman', 'baik'),
+('Es Kopi', 45, 10, 2500, 5000, 60, 'Minuman', 'baik'),
+('Capucino Panas', 30, 10, 2500, 5000, 35, 'Minuman', 'baik'),
+('Es Capucino', 40, 10, 3000, 6000, 50, 'Minuman', 'baik'),
+('Susu Panas', 25, 5, 2000, 4000, 28, 'Minuman', 'baik'),
+('Kuku Bima', 30, 10, 2000, 4000, 40, 'Minuman', 'baik'),
+('Kuku Bima + Susu', 25, 5, 3000, 6000, 35, 'Minuman', 'baik'),
+('Extra Joss', 35, 10, 2000, 4000, 55, 'Minuman', 'baik'),
+('Extra Joss + Susu', 25, 5, 3000, 6000, 45, 'Minuman', 'baik'),
+('Nutrisari', 40, 10, 2000, 4000, 70, 'Minuman', 'baik'),
+('Indomie', 50, 15, 3000, 6000, 110, 'Makanan', 'baik'),
+('Indomie + Telor', 35, 10, 5000, 10000, 95, 'Makanan', 'baik'),
+('Indomie + Nasi', 30, 10, 5000, 10000, 65, 'Makanan', 'baik'),
+('Indomie + Nasi + Telor', 25, 10, 7000, 14000, 80, 'Makanan', 'baik'),
+('Stik PS3 DualShock', 20, 5, 80000, 150000, 0, 'Alat', 'baik'),
+('Stik PS4 DualShock', 15, 4, 150000, 350000, 0, 'Alat', 'baik'),
+('Kabel HDMI Premium', 10, 3, 15000, 30000, 0, 'Alat', 'baik'),
+('Kabel Power Console', 10, 3, 10000, 25000, 0, 'Alat', 'baik');
 
 -- Seed 10 Rental Bawa Pulang Slots
 INSERT INTO rental_bawa_pulang (id_rental, nama_konsol, jenis_konsol, status) VALUES
